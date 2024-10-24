@@ -1,90 +1,108 @@
 from django.db import models
 from django.contrib.auth.models import UserManager, AbstractUser, PermissionsMixin
+import uuid
 
 
-class CustomeUserManager(UserManager):
+from django.db import models
+from django.contrib.auth.models import AbstractUser, UserManager, PermissionsMixin
+import uuid
+
+class CustomUserManager(UserManager):
     def _create_user(self, email, password, **extra_fields):
         if not email:
-            raise ValueError("You have entred ana invalid email!!🙂‍↔️")
+            raise ValueError("You must provide an email address")
         email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
-        user.save (using=self._db)
+        user.save(using=self._db)
+        return user
 
-        return user 
-    
-    def create_user (self, email, password, **extra_fields):
-        extra_fields.setdefault('is_staff', False)
-        extra_fields.setdefault('is_supper_user', False)
-
-        return self._create_user(email, password, **extra_fields)
-    
-    def create_superuser(self, username, email, password, **extra_fields):
-        # return super().create_superuser(username, email, password, **extra_fields)
+    def create_user(self, email, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', False)
         extra_fields.setdefault('is_superuser', False)
-
         return self._create_user(email, password, **extra_fields)
+
+    def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        return self._create_user(email, password, **extra_fields)
+
 class User(AbstractUser, PermissionsMixin):
-    email = models.EmailField(blank=True, default='', unique=True)
-    name = models.CharField(max_length=100, blank=True, default='')
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email = models.EmailField(unique=True)
+    full_name = models.CharField(max_length=100, blank=True, default='')
 
+    # Set unique related_name for groups and user_permissions
+    groups = models.ManyToManyField(
+        'auth.Group',
+        related_name='custom_user_set',  # Change this to something unique
+        blank=True,
+    )
+    user_permissions = models.ManyToManyField(
+        'auth.Permission',
+        related_name='custom_user_permissions_set',  # Change this to something unique
+        blank=True,
+    )
 
-    is_active = models.BooleanField(default=True)
-    is_superuser = models.BooleanField(default=False)
-    is_staff = models.BooleanField(default=False)
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = []
 
-    employee_profile = models.OneToOneField('Employee', blank=True, null=True, on_delete=models.SET_NULL)
-    manager_profile = models.OneToOneField('Manager', blank=True, null=True, on_delete=models.SET_NULL)
-    author_profile =models.OneToOneField('Author', null=True, blank=True, on_delete=models.SET_NULL)
-
-
-    date_joined = models.DateTimeField(auto_now_add=True)  #default=timezone.now (optional)
-    last_login = models.DateTimeField(blank=True, null=True)
-
-    objects = CustomeUserManager()
-
-    USER_NAMEFIELD = 'name'
-    EMAIL_FIELD = 'email'
-    REQUIRED_FIELDS =[]
-
-    class Meta:
-        verbose_name = 'user'
-        verbose_name_plural = 'Users'
-
-    def get_full_name(self):
-        return self.name 
-    
-    def get_short_name(self):
-        return self.name or self.email.split('@')[0]
-
-
-class Department(models.Model):
-    department_name = models.CharField(max_length=250)
+    objects = CustomUserManager()
 
     def __str__(self):
-        return self.department_name
+        return self.email
+
     
 class Book(models.Model):
+    ID = models.UUIDField(primary_key=True, editable=False, default=uuid.uuid4)
     title = models.CharField(max_length=100)
+    ISBN = models.BigAutoField
+    publication_date = models.DateField(null=True, blank=True)
+    copies_availabel = models.IntegerField(null=True, blank=True)
 
     def __str__(self):
         return self.title
 
-class Employee(models.Model):
-    id = models.BigAutoField
+class Member(models.Model):
+    memeber_id = models.UUIDField(primary_key=True, editable=False, default=uuid.uuid4)
+    full_name = models.CharField(max_length=150)
+    email = models.EmailField(null=True, blank=True, default='')
+    phone = models.CharField(max_length=150)
+
+    def __str__(self):
+        return self.full_name
+    
+class Librarian(models.Model):
+    ID = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     full_name = models.CharField(max_length=100)
     email = models.CharField(max_length=100)
     phone = models.CharField(max_length=20)
 
     def __str__(self):
-        return f"{self.full_name}, {self.department}"
+        return f"{self.full_name}"
+    
+class Borrow(models.Model):
+    borrow_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    borrow_date = models.DateField(auto_now_add=True)
+    due_date = models.DateField(null=True, blank=True)
+    return_date = models.DateField(null=True, blank=True)
+    member = models.ForeignKey('Member', on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"Borrow ID: {self.borrow_id}, Member: {self.member.full_name}"
 
 class Manager(models.Model):
-    pass
+    manager_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    full_name = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.full_name
 
 class Author(models.Model):
-    id = models.BigAutoField
+    author_id = models.BigAutoField(primary_key=True)
     full_name = models.CharField(max_length=100)
-    
+    books = models.ManyToManyField('Book', related_name='authors')
+
+    def __str__(self):
+        return self.full_name
 
